@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code Chat Browser</title>
+    <link rel="stylesheet" href="vendor/prism.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="vendor/alpine.min.js" defer></script>
+    <script src="vendor/prism.js"></script>
+    <script src="vendor/prism-python.min.js"></script>
+    <script src="vendor/prism-javascript.min.js"></script>
+    <script src="vendor/prism-typescript.min.js"></script>
+    <script src="vendor/prism-bash.min.js"></script>
+    <script src="vendor/prism-json.min.js"></script>
+    <script src="vendor/prism-yaml.min.js"></script>
+    <script src="vendor/prism-sql.min.js"></script>
+    <script src="vendor/prism-markup.min.js"></script>
+    <script src="vendor/marked.min.js"></script>
+</head>
+<body x-data="ccbApp()" class="bg-gray-900 text-gray-100 h-screen overflow-hidden">
+    <div class="flex h-full">
+        <!-- Sidebar -->
+        <div class="w-80 flex-shrink-0 bg-gray-800 border-r border-gray-700 flex flex-col overflow-hidden">
+            <div class="p-4 border-b border-gray-700">
+                <div class="flex justify-between items-center mb-4">
+                    <h1 class="text-xl font-bold">CCCB</h1>
+                    <button
+                        @click="location.reload()"
+                        title="Refresh (Ctrl+R)"
+                        class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+                    >
+                        ↻
+                    </button>
+                </div>
+
+                <!-- Project filter -->
+                <select x-model="selectedProject" @change="onProjectChange()" class="w-full px-3 py-2 pr-10 bg-gray-700 text-gray-100 rounded mb-3 text-sm select-chevron">
+                    <option value="">All Projects</option>
+                    <template x-for="project in projects" :key="project.path">
+                        <option :value="project.path" :title="project.path" x-text="`${project.name} (${project.session_count})`"></option>
+                    </template>
+                </select>
+
+                <!-- Search -->
+                <input
+                    type="text"
+                    x-model="query"
+                    @input="debounce(() => onSearch(), 300)"
+                    placeholder="Search chats..."
+                    class="w-full px-3 py-2 rounded text-sm search-box"
+                >
+            </div>
+
+            <!-- Chat list grouped by project -->
+            <div class="flex-1 overflow-y-auto">
+                <template x-for="group in getGroupedChats()" :key="group.path">
+                    <div>
+                        <!-- Project header (collapsible) -->
+                        <div
+                            @click="toggleProject(group.path)"
+                            :title="group.path"
+                            class="px-4 py-2 bg-gray-900 text-gray-400 text-xs font-semibold uppercase sticky top-0 border-b border-gray-700 cursor-pointer hover:bg-gray-800 transition"
+                        >
+                            <span class="inline-block mr-2" x-text="isProjectExpanded(group.path) ? '▼' : '▶'"></span>
+                            <span x-text="group.name"></span>
+                            <span class="text-gray-500" x-text="`(${group.chats.length})`"></span>
+                        </div>
+                        <!-- Chats in this project (collapsed by default) -->
+                        <template x-if="isProjectExpanded(group.path)">
+                            <template x-for="chat in group.chats" :key="chat.id">
+                                <div
+                                    @click="selectChat(chat.id)"
+                                    :class="{ 'bg-blue-600': currentChatId === chat.id, 'bg-gray-700': currentChatId !== chat.id }"
+                                    class="px-4 py-3 cursor-pointer border-b border-gray-700 hover:bg-gray-600 transition"
+                                >
+                                    <div class="font-semibold text-sm" x-text="chat.name"></div>
+                                    <div class="text-xs text-gray-400 mt-1">
+                                        <span x-text="`${chat.message_count} messages`"></span>
+                                        <span x-text="`${chat.total_tokens} tokens`"></span>
+                                    </div>
+                                    <div class="text-xs text-gray-500 mt-1" x-text="formatDate(chat.last_timestamp)"></div>
+                                </div>
+                            </template>
+                        </template>
+                    </div>
+                </template>
+                <div x-show="chats.length === 0" class="p-4 text-center text-gray-400 text-sm">
+                    No chats found
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="border-t border-gray-700 p-4 flex justify-center">
+                <a
+                    href="https://github.com/rick-does"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-sm text-gray-400 hover:text-gray-100 transition"
+                >
+                    GitHub/Feedback
+                </a>
+            </div>
+        </div>
+
+        <!-- Main pane -->
+        <div class="flex-1 bg-gray-900 flex flex-col overflow-hidden">
+            <template x-if="currentChat">
+                <div class="flex flex-col h-full overflow-hidden">
+                    <!-- Header -->
+                    <div class="p-4 border-b border-gray-700 space-y-4">
+                        <!-- Search box with optional navigation controls -->
+                        <div class="flex gap-2 items-center w-full flex-wrap">
+                            <div style="flex: 1 1 0; min-width: 0; position: relative; display: flex;">
+                                <input
+                                    type="text"
+                                    x-model="transcriptSearch"
+                                    @input="debounce(() => updateSearchMatches(), 150)"
+                                    @focus="searchBoxFocused = true"
+                                    @blur="searchBoxFocused = false"
+                                    placeholder="Search in chat..."
+                                    style="flex: 1 1 0; min-width: 0;"
+                                    class="px-3 py-2 rounded text-sm search-box"
+                                >
+                                <button x-show="transcriptSearch.length > 0" @click="transcriptSearch = ''; updateSearchMatches(); searchBoxFocused = false;" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: #888888; cursor: pointer; width: 1.8rem; height: 1.8rem; display: flex; align-items: center; justify-content: center; font-size: 24px; line-height: 1;">×</button>
+                            </div>
+                            <div x-show="searchBoxFocused || transcriptSearch.length > 0" class="flex items-center gap-2" style="flex-shrink: 0;">
+                                <button
+                                    @click="previousMatch()"
+                                    :disabled="matchCount === 0"
+                                    style="width: 1.8rem; flex: 0 0 1.8rem; background-color: #111827 !important;"
+                                    class="py-2 text-gray-400 hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm"
+                                >
+                                    &#10094;
+                                </button>
+                                <button
+                                    @click="nextMatch()"
+                                    :disabled="matchCount === 0"
+                                    style="width: 1.8rem; flex: 0 0 1.8rem; background-color: #111827 !important;"
+                                    class="py-2 text-gray-400 hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm"
+                                >
+                                    &#10095;
+                                </button>
+                                <div class="text-xs text-gray-400 whitespace-nowrap" style="width: 4rem; flex-shrink: 0; display: flex; justify-content: center; align-items: center; background-color: #111827;" x-text="`${matchCount > 0 ? currentMatch : 0}/${matchCount}`"></div>
+                                <input
+                                    type="number"
+                                    x-model.number="jumpToMatch"
+                                    @keyup.enter="goToMatch()"
+                                    :disabled="matchCount === 0"
+                                    placeholder="Go"
+                                    min="1"
+                                    style="width: 3rem; padding-left: 8px; flex-shrink: 0; background-color: #111827 !important; color: #888888 !important; border: 1px solid #888888 !important;"
+                                    class="py-2 rounded text-sm text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                            </div>
+                        </div>
+                        <!-- Title and buttons -->
+                        <div class="flex justify-between items-start gap-4">
+                            <div>
+                                <h2 class="text-lg font-bold" x-text="currentChat.name"></h2>
+                                <p class="text-sm text-gray-400" x-text="currentChat.project_path"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Transcript -->
+                    <div id="transcript" class="flex-1 overflow-y-auto p-4 space-y-4" @contextmenu="showContextMenu($event)">
+                        <template x-for="(turn, idx) in currentChat.turns" :key="idx">
+                            <div :class="{ 'mr-12': turn.role === 'user', 'ml-0': turn.role === 'assistant' }" class="space-y-2">
+                                <!-- Turn header -->
+                                <div :class="{ 'text-blue-400': turn.role === 'user', 'text-green-400': turn.role === 'assistant' }" class="text-xs font-semibold uppercase">
+                                    <span x-text="turn.role"></span>
+                                    <template x-if="turn.model">
+                                        <span x-text="`• ${turn.model}`" class="text-gray-500"></span>
+                                    </template>
+                                    <template x-if="turn.usage?.output_tokens">
+                                        <span x-text="`• ${turn.usage.output_tokens} tokens`" class="text-gray-500"></span>
+                                    </template>
+                                </div>
+
+                                <!-- Content blocks -->
+                                <template x-for="(block, blockIdx) in turn.content" :key="blockIdx">
+                                    <div>
+                                        <!-- Text block -->
+                                        <template x-if="block.type === 'text'">
+                                        <div
+                                            class="prose prose-invert max-w-none text-sm"
+                                            @click="$dispatch('prism-highlight')"
+                                            x-html="renderMarkdown(highlightText(block.text))"
+                                        ></div>
+                                    </template>
+
+                                    <!-- Thinking block -->
+                                    <template x-if="block.type === 'thinking'">
+                                        <div x-data="{ open: false }" class="pl-3">
+                                            <button
+                                                @click="open = !open"
+                                                style="background: transparent !important;"
+                                                class="text-sm text-gray-500 font-semibold flex items-center gap-1"
+                                            >
+                                                <span x-show="!open">▶</span>
+                                                <span x-show="open">▼</span>
+                                                Thinking
+                                            </button>
+                                            <template x-if="open && block.thinking">
+                                                <div class="mt-2 bg-gray-800 p-2 rounded text-xs whitespace-pre-wrap font-mono text-gray-300">
+                                                    <span x-html="highlightText(block.thinking)"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <!-- Tool use block -->
+                                    <template x-if="block.type === 'tool_use'">
+                                        <div x-data="{ open: false }" class="pl-3">
+                                            <button
+                                                @click="open = !open"
+                                                style="background: transparent !important;"
+                                                class="text-sm text-gray-500 font-semibold flex items-center gap-1"
+                                            >
+                                                <span x-show="!open">▶</span>
+                                                <span x-show="open">▼</span>
+                                                Tool: <span x-text="block.name"></span>
+                                            </button>
+                                            <template x-if="open">
+                                                <div class="mt-2 bg-gray-800 p-2 rounded text-xs whitespace-pre-wrap font-mono text-gray-300">
+                                                    <span x-text="JSON.stringify(block.input, null, 2)"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <!-- Tool result block -->
+                                    <template x-if="block.type === 'tool_result'">
+                                        <div x-data="{ open: false }" class="pl-3">
+                                            <button
+                                                @click="open = !open"
+                                                style="background: transparent !important;"
+                                                class="text-sm text-gray-500 font-semibold flex items-center gap-1"
+                                            >
+                                                <span x-show="!open">▶</span>
+                                                <span x-show="open">▼</span>
+                                                Result (ID: <span x-text="block.tool_use_id.slice(0, 8)"></span>...)
+                                            </button>
+                                            <template x-if="open">
+                                                <div class="mt-2 bg-gray-800 p-2 rounded text-xs whitespace-pre-wrap font-mono text-gray-300 max-h-96 overflow-y-auto">
+                                                    <span x-html="highlightText(block.content)"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Context Menu -->
+                    <div x-show="contextMenu.visible" @click.away="contextMenu.visible = false" :style="{ position: 'fixed', left: contextMenu.x + 'px', top: contextMenu.y + 'px', zIndex: 1000, backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '0.375rem', minWidth: '120px' }" style="box-shadow: 0 10px 15px rgba(0,0,0,0.3);">
+                        <template x-if="contextMenu.hasSelection">
+                            <button @click="copySelected()" style="display: block; width: 100%; text-align: left; padding: 0.5rem 1rem; font-size: 0.875rem; color: #f3f4f6; border: none; background: transparent; cursor: pointer; white-space: nowrap;" @mouseenter="$el.style.backgroundColor='#374151'" @mouseleave="$el.style.backgroundColor='transparent'">Copy</button>
+                        </template>
+                        <button @click="selectAll()" style="display: block; width: 100%; text-align: left; padding: 0.5rem 1rem; font-size: 0.875rem; color: #f3f4f6; border: none; background: transparent; cursor: pointer; white-space: nowrap;" @mouseenter="$el.style.backgroundColor='#374151'" @mouseleave="$el.style.backgroundColor='transparent'">Select All</button>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="!currentChat">
+                <div class="flex items-center justify-center h-full text-gray-400 text-center">
+                    <div>
+                        <p class="text-lg">Select a chat to view</p>
+                        <p class="text-sm mt-2">Browse the list on the left</p>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
