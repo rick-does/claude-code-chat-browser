@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Build standalone .exe for Claude Code Browser."""
 
-import subprocess
 import sys
-import os
 from pathlib import Path
+from PyInstaller.__main__ import run as pyinstaller_run
 
 def build():
     script = Path(__file__).parent / "main.py"
@@ -13,10 +12,7 @@ def build():
     # PyInstaller uses ; on Windows, : on Unix
     separator = ";" if sys.platform == "win32" else ":"
 
-    cmd = [
-        sys.executable,
-        "-m",
-        "pyinstaller",
+    args = [
         "--onefile",
         "--windowed",
         "--name", "CCB",
@@ -26,17 +22,16 @@ def build():
         str(script),
     ]
 
-    print(f"Building CCB executable...\n")
-    result = subprocess.run(cmd, cwd=Path(__file__).parent)
-
-    if result.returncode == 0:
+    print("Building CCB executable...\n")
+    try:
+        pyinstaller_run(args)
         dist_dir = Path(__file__).parent / "dist"
         exe = dist_dir / ("CCB.exe" if sys.platform == "win32" else "CCB")
-        print(f"\n✓ Build successful!")
+        print(f"\n[OK] Build successful!")
         print(f"  Executable: {exe}")
         print(f"  Run: {exe}")
-    else:
-        print(f"\n✗ Build failed with return code {result.returncode}")
+    except Exception as e:
+        print(f"\n[ERROR] Build failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
