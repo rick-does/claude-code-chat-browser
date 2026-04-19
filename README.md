@@ -5,11 +5,12 @@ A lightweight desktop app for browsing, searching, and copying text from your Cl
 ## Features
 
 - **Browse chats** — Organized by project with expandable groups
-- **Full-text search** — Find conversations by name or content
-- **View transcripts** — Syntax-highlighted code blocks, expandable thinking sections, tool visualizations
+- **Full-text search** — Find conversations by name or content, with navigation wrapping
+- **View transcripts** — Syntax-highlighted code blocks, expandable thinking sections, tool visualizations, message numbering
 - **Copy to clipboard** — Extract text, code, or entire conversations
+- **Light/Dark mode** — Toggle theme with persistent preference
 - **Metadata** — See message count, token usage, and timestamps
-- **Persistent state** — Remembers your last opened chat
+- **Persistent state** — Remembers your last opened chat and theme preference
 
 ## Install
 
@@ -29,7 +30,9 @@ python main.py
 
 - **Search** — Type in the sidebar to filter chats
 - **Project filter** — Select a project to narrow the list
-- **Transcript search** — Use the search box in the main pane to find text within a chat
+- **Transcript search** — Use the search box in the main pane to find text within a chat; navigate with arrow buttons (wraps around at edges)
+- **Message numbering** — Each user/assistant message is numbered for easy reference when copying sections
+- **Light/Dark mode** — Click the theme toggle button (◑/◯) next to the refresh button to switch themes
 - **Copy** — Right-click to copy selected text or entire sections
 - **GitHub** — Click the footer link to report issues or request features
 

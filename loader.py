@@ -255,6 +255,9 @@ def load_session_full(jsonl_path: Path) -> Optional[dict]:
         if turn:
             turns.append(turn)
 
+    # Sort turns by timestamp to ensure proper conversation order
+    turns.sort(key=lambda t: t.get("timestamp", ""))
+
     return {
         "id": jsonl_path.stem,
         "name": session_name or "untitled",

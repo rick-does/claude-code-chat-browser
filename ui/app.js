@@ -17,9 +17,11 @@ function ccbApp() {
         allMatches: [],
         searchBoxFocused: false,
         contextMenu: { visible: false, x: 0, y: 0, hasSelection: false },
+        isDarkMode: true,
 
         async init() {
             console.log("init() called");
+            this.initTheme();
             // Ctrl+R to refresh
             window.addEventListener("keydown", (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === "r") {
@@ -214,13 +216,21 @@ function ccbApp() {
         },
 
         previousMatch() {
-            if (this.currentMatch <= 1) return;
-            this.scrollToMatch(this.currentMatch - 2);
+            if (this.matchCount === 0) return;
+            if (this.currentMatch <= 1) {
+                this.scrollToMatch(this.matchCount - 1);
+            } else {
+                this.scrollToMatch(this.currentMatch - 2);
+            }
         },
 
         nextMatch() {
-            if (this.currentMatch >= this.matchCount) return;
-            this.scrollToMatch(this.currentMatch);
+            if (this.matchCount === 0) return;
+            if (this.currentMatch >= this.matchCount) {
+                this.scrollToMatch(0);
+            } else {
+                this.scrollToMatch(this.currentMatch);
+            }
         },
 
         goToMatch() {
@@ -257,6 +267,26 @@ function ccbApp() {
                 selection.addRange(range);
             }
             this.contextMenu.visible = false;
+        },
+
+        initTheme() {
+            const saved = localStorage.getItem('theme');
+            this.isDarkMode = saved ? saved === 'dark' : true;
+            this.applyTheme();
+        },
+
+        toggleTheme() {
+            this.isDarkMode = !this.isDarkMode;
+            localStorage.setItem('theme', this.isDarkMode ? 'dark' : 'light');
+            this.applyTheme();
+        },
+
+        applyTheme() {
+            if (this.isDarkMode) {
+                document.body.classList.remove('light-mode');
+            } else {
+                document.body.classList.add('light-mode');
+            }
         },
     };
 }
