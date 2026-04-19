@@ -1,5 +1,7 @@
 # Claude Code Chat Browser (CCB)
 
+[![Build Executable](https://github.com/rick-does/claude-code-chat-browser/actions/workflows/build.yml/badge.svg)](https://github.com/rick-does/claude-code-chat-browser/actions/workflows/build.yml)
+
 A lightweight desktop app for browsing, searching, and copying text from your Claude Code chat history. No cloud, no tracking—everything stays local.
 
 ## Features
