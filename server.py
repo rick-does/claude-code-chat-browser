@@ -13,6 +13,11 @@ def _is_wsl():
         return False
 
 
+def _is_linux():
+    import sys
+    return sys.platform == "linux"
+
+
 def _open_browser(url):
     if _is_wsl():
         subprocess.Popen(["cmd.exe", "/c", "start", url])
@@ -61,8 +66,21 @@ def run_server(api, ui_dir: Path, port: int = 5000):
         return jsonify(api.save_last_chat(data.get("chat_id", "")))
 
     url = f"http://localhost:{port}"
-    threading.Timer(0.8, lambda: _open_browser(url)).start()
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
+
     print(f"CCCB running at {url}")
-    app.run(host="localhost", port=port, debug=False, use_reloader=False)
+    if _is_wsl():
+        threading.Timer(0.8, lambda: _open_browser(url)).start()
+    elif _is_linux():
+        import socket
+        try:
+            ip = socket.gethostbyname(socket.gethostname())
+        except OSError:
+            ip = "unknown"
+        print(f"Network access: http://{ip}:{port}")
+    else:
+        threading.Timer(0.8, lambda: _open_browser(url)).start()
+
+    host = "0.0.0.0" if _is_linux() and not _is_wsl() else "localhost"
+    app.run(host=host, port=port, debug=False, use_reloader=False)
