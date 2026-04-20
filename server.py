@@ -1,7 +1,23 @@
+import logging
+import subprocess
 import threading
 import webbrowser
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, Response
+
+
+def _is_wsl():
+    try:
+        return b"microsoft" in Path("/proc/version").read_bytes().lower()
+    except OSError:
+        return False
+
+
+def _open_browser(url):
+    if _is_wsl():
+        subprocess.Popen(["cmd.exe", "/c", "start", url])
+    else:
+        webbrowser.open(url)
 
 
 def run_server(api, ui_dir: Path, port: int = 5000):
@@ -45,6 +61,8 @@ def run_server(api, ui_dir: Path, port: int = 5000):
         return jsonify(api.save_last_chat(data.get("chat_id", "")))
 
     url = f"http://localhost:{port}"
-    threading.Timer(0.8, lambda: webbrowser.open(url)).start()
-    print(f"CCB running at {url}")
+    threading.Timer(0.8, lambda: _open_browser(url)).start()
+    log = logging.getLogger("werkzeug")
+    log.setLevel(logging.ERROR)
+    print(f"CCCB running at {url}")
     app.run(host="localhost", port=port, debug=False, use_reloader=False)
