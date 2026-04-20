@@ -1,4 +1,4 @@
-# Claude Code Chat Browser (CCB)
+# Claude Code Chat Browser (CCCB)
 
 [![Build Executable](https://github.com/rick-does/claude-code-chat-browser/actions/workflows/build.yml/badge.svg)](https://github.com/rick-does/claude-code-chat-browser/actions/workflows/build.yml)
 
@@ -17,7 +17,7 @@ A lightweight desktop app for browsing, searching, and copying text from your Cl
 ## Install
 
 **Windows (Recommended):**
-1. Download `CCB.exe` from [Releases](https://github.com/rick-does/claude-code-chat-browser/releases)
+1. Download `CCCB.exe` from [Releases](https://github.com/rick-does/claude-code-chat-browser/releases)
 2. Run it — no installation needed
 
 **From Source:**
@@ -38,34 +38,50 @@ python main.py
 - **Copy** — Right-click to copy selected text or entire sections
 - **GitHub** — Click the footer link to report issues or request features
 
+## Linux / WSL
+
+On Linux and WSL, CCCB runs as a local web server instead of a desktop app. Open your browser to the URL printed on startup.
+
+**WSL:** CCCB automatically opens your Windows browser.
+
+**Remote Linux server (SSH):** Use an SSH tunnel so you can access the UI from your local browser — no firewall changes needed:
+
+```bash
+ssh -L 5000:localhost:5000 user@your-server
+```
+
+Then open `http://localhost:5000` in your local browser while the tunnel is active.
+
 ## Building
 
-To create a standalone `.exe` (Windows):
+To create a standalone executable:
 
 ```bash
 pip install -r requirements.txt
 python build.py
 ```
 
-Output: `dist/CCB.exe`
+Output: `dist/CCCB.exe` (Windows), `dist/CCCB` (macOS/Linux)
+
+## Development
+
+```bash
+python main.py          # Run normally
+python main.py --dev    # Run with auto-reload on file changes
+python main.py --serve  # Force browser mode (test headless on any platform)
+python setup_vendor.py  # Download vendor libraries
+```
 
 ## Architecture
 
 - **Backend:** Python with in-memory indexing
 - **Frontend:** Alpine.js + vanilla HTML/CSS
-- **Framework:** pywebview (cross-platform desktop app)
+- **Framework:** pywebview (Windows/Mac), Flask (Linux/WSL)
 - **Data source:** `~/.claude` (Claude Code chat history)
-
-## Development
-
-```bash
-python dev.py                  # Run with auto-reload
-python setup_vendor.py         # Download vendor libraries
-```
 
 ## Data & Privacy
 
-CCB reads from your local `~/.claude` directory only—no data is sent anywhere. The app runs entirely offline.
+CCCB reads from your local `~/.claude` directory only—no data is sent anywhere. The app runs entirely offline.
 
 ## License
 
