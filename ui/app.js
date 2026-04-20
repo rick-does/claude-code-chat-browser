@@ -1,5 +1,25 @@
+const httpApi = {
+    get_projects: () => fetch("/api/get_projects").then(r => r.json()),
+    get_chats: (project, query) => {
+        const p = new URLSearchParams();
+        if (project) p.set("project", project);
+        if (query) p.set("query", query);
+        return fetch(`/api/get_chats?${p}`).then(r => r.json());
+    },
+    get_chat: (session_id) => fetch(`/api/get_chat?session_id=${encodeURIComponent(session_id)}`).then(r => r.json()),
+    copy_to_clipboard: (text) => navigator.clipboard.writeText(text).then(() => true),
+    get_version: () => fetch("/api/get_version").then(r => r.json()),
+    get_last_chat: () => fetch("/api/get_last_chat").then(r => r.json()),
+    save_last_chat: (chat_id) => fetch("/api/save_last_chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id }),
+    }).then(r => r.json()),
+};
+
 function ccbApp() {
     return {
+        api: null,
         projects: [],
         chats: [],
         currentChat: null,
@@ -22,47 +42,53 @@ function ccbApp() {
         async init() {
             console.log("init() called");
             this.initTheme();
-            // Ctrl+R to refresh
             window.addEventListener("keydown", (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === "r") {
                     e.preventDefault();
                     location.reload();
                 }
             });
-            // Wait for pywebview to be ready before loading data
-            window.addEventListener("pywebviewready", async () => {
-                console.log("pywebviewready event fired");
-                try {
-                    console.log("Calling get_projects...");
-                    this.projects = await window.pywebview.api.get_projects();
-                    console.log("Got projects:", this.projects);
-                    console.log("Calling get_chats...");
-                    this.chats = await window.pywebview.api.get_chats();
-                    console.log("Got chats:", this.chats);
-                    this.ready = true;
 
-                    // Restore previously open chat
-                    try {
-                        const lastChatId = await window.pywebview.api.get_last_chat();
-                        if (lastChatId && this.chats.find(c => c.id === lastChatId)) {
-                            this.selectChat(lastChatId);
-                        }
-                    } catch (e) {
-                        console.log("Could not restore last chat");
-                    }
-
-                    // Poll for backend restarts (dev mode auto-reload)
+            if (window.CCB_HEADLESS) {
+                this.api = httpApi;
+                await this.loadData();
+                this.startVersionPoll();
+            } else {
+                window.addEventListener("pywebviewready", async () => {
+                    console.log("pywebviewready event fired");
+                    this.api = window.pywebview.api;
+                    await this.loadData();
                     this.startVersionPoll();
+                });
+            }
+        },
+
+        async loadData() {
+            try {
+                console.log("Calling get_projects...");
+                this.projects = await this.api.get_projects();
+                console.log("Got projects:", this.projects);
+                this.chats = await this.api.get_chats();
+                console.log("Got chats:", this.chats);
+                this.ready = true;
+
+                try {
+                    const lastChatId = await this.api.get_last_chat();
+                    if (lastChatId && this.chats.find(c => c.id === lastChatId)) {
+                        this.selectChat(lastChatId);
+                    }
                 } catch (e) {
-                    console.error("Failed to load initial data:", e);
+                    console.log("Could not restore last chat");
                 }
-            });
+            } catch (e) {
+                console.error("Failed to load initial data:", e);
+            }
         },
 
         async startVersionPoll() {
             setInterval(async () => {
                 try {
-                    const version = await window.pywebview.api.get_version();
+                    const version = await this.api.get_version();
                     if (this.lastVersion === null) {
                         this.lastVersion = version;
                     } else if (version !== this.lastVersion) {
@@ -87,7 +113,7 @@ function ccbApp() {
         async updateChats() {
             try {
                 console.log("updateChats called with project:", this.selectedProject, "query:", this.query);
-                this.chats = await window.pywebview.api.get_chats(
+                this.chats = await this.api.get_chats(
                     this.selectedProject || null,
                     this.query || null
                 );
@@ -104,10 +130,9 @@ function ccbApp() {
         async selectChat(chatId) {
             try {
                 this.currentChatId = chatId;
-                await window.pywebview.api.save_last_chat(chatId);
-                this.currentChat = await window.pywebview.api.get_chat(chatId);
+                await this.api.save_last_chat(chatId);
+                this.currentChat = await this.api.get_chat(chatId);
                 if (this.currentChat) {
-                    // Pass sidebar search to transcript search
                     this.transcriptSearch = this.query;
 
                     this.$nextTick(() => {
@@ -138,7 +163,7 @@ function ccbApp() {
                         }
                     }
                 }
-                await window.pywebview.api.copy_to_clipboard(text);
+                await this.api.copy_to_clipboard(text);
                 alert("Chat copied to clipboard");
             } catch (e) {
                 console.error("Failed to copy:", e);
@@ -204,12 +229,9 @@ function ccbApp() {
         },
 
         scrollToMatch(index) {
-            // Re-query marks in case DOM was updated
             const marks = document.querySelectorAll('mark');
             if (index < 0 || index >= marks.length) return;
-            // Remove current-match class from all marks
             marks.forEach(m => m.classList.remove('current-match'));
-            // Add it to the target match
             marks[index].classList.add('current-match');
             this.currentMatch = index + 1;
             marks[index].scrollIntoView({ behavior: "smooth", block: "center" });
@@ -290,4 +312,3 @@ function ccbApp() {
         },
     };
 }
-
